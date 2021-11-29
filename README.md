@@ -22,3 +22,10 @@ If a build file (executable file) exist, the OS using to build file is:
 * help: `python3 login_to_pod.py -h`
 * usage: `python3 login_to_pod.py -p pod-name`
     * The `pod-name` is not need exactly match
+    
+### `network_status_check.py`: check for network and reboot OS if failed / (or) refresh interface (Windows)
+
+* help: `python3 network_status_check.py -h`
+* usage: 
+    * `python3 network_status_check.py --url http://192.168.1.1` (reboot OS if failed)
+    * `python3 network_status_check.py --url http://192.168.1.1 -ri "Local Area Connection"` (refresh interface if failed)
