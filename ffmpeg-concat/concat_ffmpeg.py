@@ -114,8 +114,8 @@ END={end}
 title={title}
 """
 
-        with open(output_metadata_file, "a") as meta_file:
-            meta_file.write(text)
+        with open(output_metadata_file, "ab") as meta_file:
+            meta_file.write(text.encode('utf8'))
 
     output_metadata_file = os.path.join(os.path.dirname(video_file), "FFMETADATAFILE.txt")
     if os.path.isfile(output_metadata_file):
@@ -199,15 +199,15 @@ if __name__ == "__main__":
     # generate list of concat files
     print("- Generate concat file list...")
     concat_list = os.path.join(temp_dir, "CONCAT_" + base_name).replace("\\", "/") + ".txt"
-    with open(concat_list, "w+") as f:
-        f.write(generate_concat_list(chapter_data))
+    with open(concat_list, "wb+") as f:
+        f.write(generate_concat_list(chapter_data).encode('utf8'))
         f.close()
 
     # generate chapter text
     print("- Generate chapters metadata...")
     chapter_file = os.path.join(temp_dir, "CHAPTER_" + base_name).replace("\\", "/") + ".txt"
-    with open(chapter_file, "w+") as f:
-        f.write(generate_chapter_info(chapter_data))
+    with open(chapter_file, "wb+") as f:
+        f.write(generate_chapter_info(chapter_data).encode('utf8'))
         f.close()
 
     # run concat
@@ -233,6 +233,3 @@ if __name__ == "__main__":
     else:
         print("Run concat error!")
         print(output)
-
-
-
