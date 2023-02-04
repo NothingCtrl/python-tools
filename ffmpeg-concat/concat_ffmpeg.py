@@ -12,6 +12,8 @@ import subprocess
 import re
 import json
 import time
+from natsort import natsorted, ns
+# from operator import itemgetter
 
 VIDEO_EXTENSION = ("mp4", "mpeg", "mpg", "mkv")
 
@@ -161,28 +163,48 @@ if __name__ == "__main__":
     print("=== CONCAT MULTI-VIDEO FILE TO SINGLE FILE WITH CHAPTERS INFO ===")
     print("*-" * 40)
     start_time = time.time()
-    source_dir = input("Scan video from folder: ")
+    source_dir = input("Video source folder: ")
     output_dir = input("Output folder (blank to using same source folder): ")
-    fix_video_first = input("Run fix for audio sync (in-case result audio out-of-sync, enter to ignore): ")
+    print("Running config, input '1' or 'y' to confirm, ENTER to ignore...")
+    fix_video_first = input("  - Run audio sync fix before concat videos? (default: NO) ")
+    dry_run = input("  - Dry run mode? (default: NO) ")
+    keep_exist = input("  - Keep existing chapter file? (default: Overwrite) ")
     # encode_video = input("Encode video (blank to using copy mode): ")
     current_dir = os.path.dirname(os.path.realpath(__file__))
     # ---
+    dry_run = True if dry_run in ('1', 'y') else False
+    keep_exist = True if keep_exist in ('1', 'y') else False
     temp_dir = os.path.join(current_dir, "temp")
     if not os.path.isdir(temp_dir):
         os.mkdir(temp_dir)
 
     chapter_data = []
     total_time = 0
-    if os.path.isdir(source_dir):
-        all_items = scan_folder(source_dir)
-        for ai in all_items:
-            if os.path.isfile(ai) and ai.split(".")[-1].lower() in VIDEO_EXTENSION:
-                dir_name = os.path.basename(os.path.dirname(ai))
-                video_time = get_length(ai)
-                chapter_data.append({'start': int(total_time) + 1, 'name': f"{dir_name} / {os.path.basename(ai)}", 'path': ai, 'length': video_time})
-                total_time += video_time
 
-    if fix_video_first in ("1", "y", "Y"):
+    base_name = os.path.basename(source_dir).replace(" ", "_") if os.path.basename(source_dir).replace(" ", "_") else f'OUTPUT_{int(start_time)}'
+    debug_file = os.path.join(temp_dir, "DEBUG_" + base_name).replace("\\", "/") + ".json"
+
+    if os.path.isdir(source_dir):
+        if keep_exist and os.path.isfile(debug_file):
+            with open(debug_file) as f:
+                _data = json.load(f)
+                chapter_data = _data['chapter_data']
+                total_time = _data['total_time']
+        else:
+            all_items = scan_folder(source_dir)
+            # sort item like Windows sort
+            all_items = natsorted(all_items, alg=ns.IGNORECASE)
+            for ai in all_items:
+                if os.path.isfile(ai) and ai.split(".")[-1].lower() in VIDEO_EXTENSION:
+                    dir_name = os.path.basename(os.path.dirname(ai))
+                    video_time = get_length(ai)
+                    chapter_data.append({'start': int(total_time) + 1, 'name': f"{dir_name} / {os.path.basename(ai)}", 'path': ai, 'length': video_time})
+                    total_time += video_time
+
+    # sort item like Windows sort
+    # chapter_data = natsorted(chapter_data, key=itemgetter(*['path']), alg=ns.IGNORECASE)
+
+    if fix_video_first in ("1", "y") and not dry_run:
         print("- RUN audio sync fix...")
         idx = 0
         for item in chapter_data:
@@ -191,26 +213,30 @@ if __name__ == "__main__":
                 chapter_data[idx]['path'] = fix_file
             idx += 1
 
-    base_name = os.path.basename(source_dir).replace(" ", "_") if os.path.basename(source_dir).replace(" ", "_") else f'OUTPUT_{int(start_time)}'
-    debug_file = os.path.join(temp_dir, "DEBUG_" + base_name).replace("\\", "/") + ".json"
+    # debug data
     with open(debug_file, "w+") as f:
-        json.dump(chapter_data, f, indent=4)
+        json.dump({'chapter_data': chapter_data, 'total_time': total_time}, f, indent=4)
 
     # generate list of concat files
     print("- Generate concat file list...")
     concat_list = os.path.join(temp_dir, "CONCAT_" + base_name).replace("\\", "/") + ".txt"
-    with open(concat_list, "wb+") as f:
-        f.write(generate_concat_list(chapter_data).encode('utf8'))
-        f.close()
+    if not keep_exist or not os.path.isfile(concat_list):
+        with open(concat_list, "wb+") as f:
+            f.write(generate_concat_list(chapter_data).encode('utf8'))
+            f.close()
 
     # generate chapter text
     print("- Generate chapters metadata...")
     chapter_file = os.path.join(temp_dir, "CHAPTER_" + base_name).replace("\\", "/") + ".txt"
-    with open(chapter_file, "wb+") as f:
-        f.write(generate_chapter_info(chapter_data).encode('utf8'))
-        f.close()
+    if not keep_exist or not os.path.isfile(chapter_file):
+        with open(chapter_file, "wb+") as f:
+            f.write(generate_chapter_info(chapter_data).encode('utf8'))
+            f.close()
 
     # run concat
+    if dry_run:
+        print("- Dry run mode, program exit...")
+        exit()
     print("- RUN file concat...")
     video_basename = os.path.basename(source_dir) if os.path.basename(source_dir) else f"OUTPUT_{int(start_time)}"
     if output_dir:
