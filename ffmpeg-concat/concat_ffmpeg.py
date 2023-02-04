@@ -158,6 +158,20 @@ def ffmpeg_fix_audio_sync(input_video: str, temp_dir_path: str):
     print(result.stdout)
     return ""
 
+def ffmpeg_video_encode(input_video: str, temp_dir_path: str):
+    ext = input_video.split(".").pop()
+    video_name_out = os.path.basename(input_video).replace(f".{ext}", "") + f"_fixed.{ext}"
+    output_video = os.path.join(temp_dir_path, video_name_out)
+    if os.path.isfile(output_video):
+        os.unlink(output_video)
+    cmd = ["ffmpeg", "-i", input_video, "-c", "copy", "-bsf:v", "h264_mp4toannexb", "-f", "mpegts", output_video]
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    if os.path.isfile(output_video):
+        return output_video.replace("\\", "/")
+    print(f"Run encode for file {input_video} error!")
+    print(result.stdout)
+    return ""
+
 if __name__ == "__main__":
     print("*-" * 40)
     print("=== CONCAT MULTI-VIDEO FILE TO SINGLE FILE WITH CHAPTERS INFO ===")
@@ -166,8 +180,14 @@ if __name__ == "__main__":
     source_dir = input("Video source folder: ")
     output_dir = input("Output folder (blank to using same source folder): ")
     print("Running config, input '1' or 'y' to confirm, ENTER to ignore...")
-    fix_video_first = input("  - Run audio sync fix before concat videos? (default: NO) ")
     dry_run = input("  - Dry run mode? (default: NO) ")
+    re_encode_first = input("  - Re-encode all input videos? (default: NO) ")
+    if re_encode_first not in ('1', 'y'):
+        re_encode_first = False
+        fix_audio_sync = input("  - Run audio sync fix for all input videos? (default: NO) ")
+    else:
+        re_encode_first = True
+        fix_audio_sync = ""
     keep_exist = input("  - Keep existing chapter file? (default: Overwrite) ")
     # encode_video = input("Encode video (blank to using copy mode): ")
     current_dir = os.path.dirname(os.path.realpath(__file__))
@@ -204,7 +224,16 @@ if __name__ == "__main__":
     # sort item like Windows sort
     # chapter_data = natsorted(chapter_data, key=itemgetter(*['path']), alg=ns.IGNORECASE)
 
-    if fix_video_first in ("1", "y") and not dry_run:
+    if re_encode_first and not dry_run:
+        print("- RUN re-encode video...")
+        idx = 0
+        for item in chapter_data:
+            fix_file = ffmpeg_video_encode(item['path'], temp_dir)
+            if fix_file:
+                chapter_data[idx]['path'] = fix_file
+            idx += 1
+
+    if fix_audio_sync in ("1", "y") and not dry_run:
         print("- RUN audio sync fix...")
         idx = 0
         for item in chapter_data:
