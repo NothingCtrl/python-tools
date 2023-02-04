@@ -159,7 +159,7 @@ def ffmpeg_fix_audio_sync(input_video: str, temp_dir_path: str):
     output_video = os.path.join(temp_dir_path, video_name_out)
     if os.path.isfile(output_video):
         return output_video.replace("\\", "/")
-    cmd = ["ffmpeg", "-async", "25", "-i", input_video, "-vcodec", "copy", "-acodec", "copy", "-r", "25", output_video]
+    cmd = ["ffmpeg", "-async", "25", "-i", input_video, "-c:v", "copy", "-c:a", "copy", "-r", "25", output_video]
     result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if os.path.isfile(output_video):
         return output_video.replace("\\", "/")
@@ -167,14 +167,16 @@ def ffmpeg_fix_audio_sync(input_video: str, temp_dir_path: str):
     print(result.stdout)
     return ""
 
-def ffmpeg_video_encode(input_video: str, temp_dir_path: str):
+def ffmpeg_re_encode(input_video: str, temp_dir_path: str):
     ext = input_video.split(".").pop()
     video_size = os.path.getsize(input_video)
     video_name_out = os.path.basename(input_video).replace(f".{ext}", "") + f"_{md5_hash(input_video + str(video_size))[-8:]}_v_fixed.{ext}"
     output_video = os.path.join(temp_dir_path, video_name_out)
     if os.path.isfile(output_video):
         return output_video.replace("\\", "/")
-    cmd = ["ffmpeg", "-i", input_video, "-c", "copy", "-bsf:v", "h264_mp4toannexb", "-f", "mpegts", output_video]
+    # cmd = ["ffmpeg", "-i", input_video, "-c", "copy", "-bsf:v", "h264_mp4toannexb", "-f", "mpegts", "-r", "30", output_video]
+    # cmd = ["ffmpeg", "-i", input_video, "-c:v", "libx264", "-c:a", "aac", "-ar", "44100", "-r", "30", output_video]
+    cmd = ["ffmpeg", "-i", input_video, "-c:v", "copy", "-c:a", "aac", "-ar", "44100", "-r", "30", output_video]
     result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if os.path.isfile(output_video):
         return output_video.replace("\\", "/")
@@ -191,10 +193,10 @@ if __name__ == "__main__":
     output_dir = input("Output folder (blank to using same source folder): ")
     print("Running config, input '1' or 'y' to confirm, ENTER to ignore...")
     dry_run = input("  - Dry run mode? (default: NO) ")
-    re_encode_first = input("  - Re-encode all input videos? (default: NO) ")
+    re_encode_first = input("  - Re-encode video(s) audio? (default: NO) ")
     if re_encode_first not in ('1', 'y'):
         re_encode_first = False
-        fix_audio_sync = input("  - Run audio sync fix for all input videos? (default: NO) ")
+        fix_audio_sync = input("  - Run audio sync fix? (default: NO) ")
     else:
         re_encode_first = True
         fix_audio_sync = ""
@@ -241,7 +243,7 @@ if __name__ == "__main__":
         print("- RUN re-encode video...")
         idx = 0
         for item in chapter_data:
-            fix_file = ffmpeg_video_encode(item['path'], temp_dir)
+            fix_file = ffmpeg_re_encode(item['path'], temp_dir)
             if fix_file:
                 chapter_data[idx]['path'] = fix_file
             idx += 1
@@ -277,13 +279,14 @@ if __name__ == "__main__":
     if dry_run:
         print("- Dry run mode, program exit...")
         exit()
-    print("- RUN file concat...")
+    print("- RUN file(s) concat...")
 
     if os.path.isfile(merged_video):
         print(f"- Delete file: {merged_video}")
         os.unlink(merged_video)
     ok_concat = ffmpeg_concat(concat_list, merged_video)
     if ok_concat:
+        print("- RUN update chapter(s) metadata...")
         # create chapter info
         ok_chapter = ffmpeg_chapter(merged_video, chapter_file, total_time, chapters_video)
         print("\n=======================================")
