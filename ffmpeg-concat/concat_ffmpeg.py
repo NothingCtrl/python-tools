@@ -79,7 +79,7 @@ def ffmpeg_chapter(video_file: str, chapter_source_file: str, video_total_time: 
 
     def metadata_with_chapter():
         chapters = list()
-        with open(chapter_source_file, 'r') as f:
+        with open(chapter_source_file, 'r', encoding='utf8', errors='ignore') as f:
             for line in f:
                 x = re.match(r"(\d{2}):(\d{2}):(\d{2}) (.*)", line)
                 hrs = int(x.group(1))
