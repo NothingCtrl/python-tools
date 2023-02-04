@@ -13,9 +13,13 @@ import re
 import json
 import time
 from natsort import natsorted, ns
+import hashlib
 # from operator import itemgetter
 
 VIDEO_EXTENSION = ("mp4", "mpeg", "mpg", "mkv")
+
+def md5_hash(text: str) -> str:
+    return hashlib.md5(text.encode('utf8')).hexdigest()
 
 def scan_folder(path: str) -> list:
     items = [path.replace("\\", "/")]
@@ -70,14 +74,18 @@ def generate_chapter_info(chapter_info: list) -> str:
         text += f"{second_to_time(item['start'])} {item['name']}"
     return text
 
-def ffmpeg_concat(source_file: str, output_file: str):
+def ffmpeg_concat(source_file: str, output_file: str) -> bool:
     cmd = ["ffmpeg", "-safe", "0", "-f", "concat", "-i", source_file, "-c", "copy", output_file]
     # if encode_mode:
     #     cmd = ["ffmpeg", "-safe", "0", "-f", "concat", "-i", source_file, "-qscale", "0", "-vcodec", "mpeg4", output_file]
     result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    return result.stdout
+    if os.path.isfile(output_file):
+        return True
+    print("[ERROR!!!] ffmpeg_concat error:\n===\n")
+    print(result.stdout)
+    return False
 
-def ffmpeg_chapter(video_file: str, chapter_source_file: str, video_total_time: float) -> str:
+def ffmpeg_chapter(video_file: str, chapter_source_file: str, video_total_time: float, output_file: str) -> bool:
 
     def metadata_with_chapter():
         chapters = list()
@@ -105,7 +113,7 @@ def ffmpeg_chapter(video_file: str, chapter_source_file: str, video_total_time: 
             title = chap['title']
             start = chap['startTime']
             if i == len(chapters) - 1:
-                end = (int(video_total_time) + 1) * 1000
+                end = int(video_total_time * 1000)
             else:
                 end = chapters[i + 1]['startTime'] - 1
             text += f"""
@@ -128,28 +136,29 @@ title={title}
         # add chapter info to metadata file
         metadata_with_chapter()
         # add metadata file back to video file
-        output_video = video_file.replace('_merged.mp4', '_Chapters.mp4')
-        if os.path.isfile(output_video):
-            print(f"- Delete file {output_video}")
-            os.unlink(output_video)
-        result2 = subprocess.run(["ffmpeg", "-i", video_file, "-i", output_metadata_file, "-map_metadata", "1", "-codec", "copy", output_video],
+        if os.path.isfile(output_file):
+            print(f"- Delete file {output_file}")
+            os.unlink(output_file)
+        result2 = subprocess.run(["ffmpeg", "-i", video_file, "-i", output_metadata_file, "-map_metadata", "1", "-codec", "copy", output_file],
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        if os.path.isfile(output_video):
-            return output_video
+        if os.path.isfile(output_file):
+            os.unlink(output_metadata_file)
+            return True
         else:
-            print("Generate chapter failed")
+            print("[ERROR!!!] Add video chapter(s) failed\n===\n")
             print(result2.stdout)
     else:
-        print("Generate default metadata file error!")
+        print("[ERROR!!!] Generate default metadata file error!\n===\n")
         print(result.stdout)
-    return ""
+    return False
 
 def ffmpeg_fix_audio_sync(input_video: str, temp_dir_path: str):
     ext = input_video.split(".").pop()
-    video_name_out = os.path.basename(input_video).replace(f".{ext}", "") + f"_fixed.{ext}"
+    video_size = os.path.getsize(input_video)
+    video_name_out = os.path.basename(input_video).replace(f".{ext}", "") + f"_{md5_hash(input_video + str(video_size))[-8:]}_a_fixed.{ext}"
     output_video = os.path.join(temp_dir_path, video_name_out)
     if os.path.isfile(output_video):
-        os.unlink(output_video)
+        return output_video.replace("\\", "/")
     cmd = ["ffmpeg", "-async", "25", "-i", input_video, "-vcodec", "copy", "-acodec", "copy", "-r", "25", output_video]
     result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if os.path.isfile(output_video):
@@ -160,10 +169,11 @@ def ffmpeg_fix_audio_sync(input_video: str, temp_dir_path: str):
 
 def ffmpeg_video_encode(input_video: str, temp_dir_path: str):
     ext = input_video.split(".").pop()
-    video_name_out = os.path.basename(input_video).replace(f".{ext}", "") + f"_fixed.{ext}"
+    video_size = os.path.getsize(input_video)
+    video_name_out = os.path.basename(input_video).replace(f".{ext}", "") + f"_{md5_hash(input_video + str(video_size))[-8:]}_v_fixed.{ext}"
     output_video = os.path.join(temp_dir_path, video_name_out)
     if os.path.isfile(output_video):
-        os.unlink(output_video)
+        return output_video.replace("\\", "/")
     cmd = ["ffmpeg", "-i", input_video, "-c", "copy", "-bsf:v", "h264_mp4toannexb", "-f", "mpegts", output_video]
     result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if os.path.isfile(output_video):
@@ -188,12 +198,10 @@ if __name__ == "__main__":
     else:
         re_encode_first = True
         fix_audio_sync = ""
-    keep_exist = input("  - Keep existing chapter file? (default: Overwrite) ")
     # encode_video = input("Encode video (blank to using copy mode): ")
     current_dir = os.path.dirname(os.path.realpath(__file__))
     # ---
     dry_run = True if dry_run in ('1', 'y') else False
-    keep_exist = True if keep_exist in ('1', 'y') else False
     temp_dir = os.path.join(current_dir, "temp")
     if not os.path.isdir(temp_dir):
         os.mkdir(temp_dir)
@@ -203,23 +211,28 @@ if __name__ == "__main__":
 
     base_name = os.path.basename(source_dir).replace(" ", "_") if os.path.basename(source_dir).replace(" ", "_") else f'OUTPUT_{int(start_time)}'
     debug_file = os.path.join(temp_dir, "DEBUG_" + base_name).replace("\\", "/") + ".json"
+    merged_video = os.path.basename(source_dir) if os.path.basename(source_dir) else f"OUTPUT_{int(start_time)}"
+    if output_dir:
+        merged_video = os.path.join(output_dir, merged_video).replace("\\", "/") + "_merged.mp4"
+    else:
+        merged_video = os.path.join(source_dir, merged_video).replace("\\", "/") + "_merged.mp4"
+
+    chapters_video = merged_video.replace("_merged.mp4", "_Chapters.mp4")
 
     if os.path.isdir(source_dir):
-        if keep_exist and os.path.isfile(debug_file):
-            with open(debug_file) as f:
-                _data = json.load(f)
-                chapter_data = _data['chapter_data']
-                total_time = _data['total_time']
-        else:
-            all_items = scan_folder(source_dir)
-            # sort item like Windows sort
-            all_items = natsorted(all_items, alg=ns.IGNORECASE)
-            for ai in all_items:
-                if os.path.isfile(ai) and ai.split(".")[-1].lower() in VIDEO_EXTENSION:
-                    dir_name = os.path.basename(os.path.dirname(ai))
-                    video_time = get_length(ai)
-                    chapter_data.append({'start': int(total_time) + 1, 'name': f"{dir_name} / {os.path.basename(ai)}", 'path': ai, 'length': video_time})
-                    total_time += video_time
+        all_items = scan_folder(source_dir)
+        # sort item like Windows sort
+        all_items = natsorted(all_items, alg=ns.IGNORECASE)
+        for ai in all_items:
+            if os.path.isfile(ai) and ai.split(".")[-1].lower() in VIDEO_EXTENSION \
+                    and os.path.basename(merged_video) not in ai and os.path.basename(chapters_video) not in ai:
+                dir_name = os.path.basename(os.path.dirname(ai))
+                video_time = get_length(ai)
+                chapter_data.append({'start': int(total_time) + 1, 'name': f"{dir_name} / {os.path.basename(ai)}", 'path': ai, 'length': video_time})
+                total_time += video_time
+    else:
+        print("- Error, source video folder is not exists!")
+        exit()
 
     # sort item like Windows sort
     # chapter_data = natsorted(chapter_data, key=itemgetter(*['path']), alg=ns.IGNORECASE)
@@ -249,42 +262,35 @@ if __name__ == "__main__":
     # generate list of concat files
     print("- Generate concat file list...")
     concat_list = os.path.join(temp_dir, "CONCAT_" + base_name).replace("\\", "/") + ".txt"
-    if not keep_exist or not os.path.isfile(concat_list):
-        with open(concat_list, "wb+") as f:
-            f.write(generate_concat_list(chapter_data).encode('utf8'))
-            f.close()
+    with open(concat_list, "wb+") as f:
+        f.write(generate_concat_list(chapter_data).encode('utf8'))
+        f.close()
 
     # generate chapter text
     print("- Generate chapters metadata...")
     chapter_file = os.path.join(temp_dir, "CHAPTER_" + base_name).replace("\\", "/") + ".txt"
-    if not keep_exist or not os.path.isfile(chapter_file):
-        with open(chapter_file, "wb+") as f:
-            f.write(generate_chapter_info(chapter_data).encode('utf8'))
-            f.close()
+    with open(chapter_file, "wb+") as f:
+        f.write(generate_chapter_info(chapter_data).encode('utf8'))
+        f.close()
 
     # run concat
     if dry_run:
         print("- Dry run mode, program exit...")
         exit()
     print("- RUN file concat...")
-    video_basename = os.path.basename(source_dir) if os.path.basename(source_dir) else f"OUTPUT_{int(start_time)}"
-    if output_dir:
-        output_file = os.path.join(output_dir, video_basename).replace("\\", "/") + "_merged.mp4"
-    else:
-        output_file = os.path.join(source_dir, video_basename).replace("\\", "/") + "_merged.mp4"
-    if os.path.isfile(output_file):
-        print(f"- Delete file: {output_file}")
-        os.unlink(output_file)
-    output = ffmpeg_concat(concat_list, output_file)
-    if os.path.isfile(output_file):
+
+    if os.path.isfile(merged_video):
+        print(f"- Delete file: {merged_video}")
+        os.unlink(merged_video)
+    ok_concat = ffmpeg_concat(concat_list, merged_video)
+    if ok_concat:
         # create chapter info
-        video_file_out = ffmpeg_chapter(output_file, chapter_file, total_time)
+        ok_chapter = ffmpeg_chapter(merged_video, chapter_file, total_time, chapters_video)
         print("\n=======================================")
-        if video_file_out:
-            print(f"Final result: {video_file_out}")
-            os.unlink(output_file)
+        if ok_chapter:
+            print(f"Final result: {chapters_video}")
+            os.unlink(merged_video)
         else:
-            print(f"Add chapter failed... output video without chapter: {output_file}")
+            print(f"Add chapter failed... output video without chapter: {merged_video}")
     else:
         print("Run concat error!")
-        print(output)
