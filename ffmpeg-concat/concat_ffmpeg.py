@@ -155,7 +155,7 @@ title={title}
 def ffmpeg_fix_audio_sync(input_video: str, temp_dir_path: str):
     ext = input_video.split(".").pop()
     video_size = os.path.getsize(input_video)
-    video_name_out = os.path.basename(input_video).replace(f".{ext}", "") + f"_{md5_hash(input_video + str(video_size))[-8:]}_a_fixed.{ext}"
+    video_name_out = os.path.basename(input_video).replace(f".{ext}", "") + f"_{md5_hash(input_video + str(video_size))[-8:]}_e1_fixed.{ext}"
     output_video = os.path.join(temp_dir_path, video_name_out)
     if os.path.isfile(output_video):
         return output_video.replace("\\", "/")
@@ -167,16 +167,46 @@ def ffmpeg_fix_audio_sync(input_video: str, temp_dir_path: str):
     print(result.stdout)
     return ""
 
-def ffmpeg_re_encode(input_video: str, temp_dir_path: str):
+def ffmpeg_audio_encode(input_video: str, temp_dir_path: str):
     ext = input_video.split(".").pop()
     video_size = os.path.getsize(input_video)
-    video_name_out = os.path.basename(input_video).replace(f".{ext}", "") + f"_{md5_hash(input_video + str(video_size))[-8:]}_v_fixed.{ext}"
+    video_name_out = os.path.basename(input_video).replace(f".{ext}", "") + f"_{md5_hash(input_video + str(video_size))[-8:]}_e2_fixed.{ext}"
     output_video = os.path.join(temp_dir_path, video_name_out)
     if os.path.isfile(output_video):
         return output_video.replace("\\", "/")
     # cmd = ["ffmpeg", "-i", input_video, "-c", "copy", "-bsf:v", "h264_mp4toannexb", "-f", "mpegts", "-r", "30", output_video]
     # cmd = ["ffmpeg", "-i", input_video, "-c:v", "libx264", "-c:a", "aac", "-ar", "44100", "-r", "30", output_video]
     cmd = ["ffmpeg", "-i", input_video, "-c:v", "copy", "-c:a", "aac", "-ar", "44100", "-r", "30", output_video]
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    if os.path.isfile(output_video):
+        return output_video.replace("\\", "/")
+    print(f"Run encode for file {input_video} error!")
+    print(result.stdout)
+    return ""
+
+def ffmpeg_encode_all(input_video: str, temp_dir_path: str):
+    ext = input_video.split(".").pop()
+    video_size = os.path.getsize(input_video)
+    video_name_out = os.path.basename(input_video).replace(f".{ext}", "") + f"_{md5_hash(input_video + str(video_size))[-8:]}_e3_fixed.{ext}"
+    output_video = os.path.join(temp_dir_path, video_name_out)
+    if os.path.isfile(output_video):
+        return output_video.replace("\\", "/")
+    cmd = ["ffmpeg", "-i", input_video, "-c:v", "libx264", "-c:a", "aac", "-ar", "44100", "-r", "30", output_video]
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    if os.path.isfile(output_video):
+        return output_video.replace("\\", "/")
+    print(f"Run encode for file {input_video} error!")
+    print(result.stdout)
+    return ""
+
+def ffmpeg_scale_video(input_video: str, temp_dir_path: str, scale_size: str, ratio_size: str):
+    ext = input_video.split(".").pop()
+    video_size = os.path.getsize(input_video)
+    video_name_out = os.path.basename(input_video).replace(f".{ext}", "") + f"_{md5_hash(input_video + str(video_size))[-8:]}_e4_fixed.{ext}"
+    output_video = os.path.join(temp_dir_path, video_name_out)
+    if os.path.isfile(output_video):
+        return output_video.replace("\\", "/")
+    cmd = ["ffmpeg", "-i", input_video, "-vf", f"scale={scale_size}", "-aspect", ratio_size, output_video]
     result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if os.path.isfile(output_video):
         return output_video.replace("\\", "/")
@@ -191,16 +221,23 @@ if __name__ == "__main__":
     start_time = time.time()
     source_dir = input("Video source folder: ")
     output_dir = input("Output folder (blank to using same source folder): ")
-    print("Running config, input '1' or 'y' to confirm, ENTER to ignore...")
-    dry_run = input("  - Dry run mode? (default: NO) ")
-    re_encode_first = input("  - Re-encode video(s) audio? (default: NO) ")
-    if re_encode_first not in ('1', 'y'):
-        re_encode_first = False
-        fix_audio_sync = input("  - Run audio sync fix? (default: NO) ")
-    else:
-        re_encode_first = True
-        fix_audio_sync = ""
-    # encode_video = input("Encode video (blank to using copy mode): ")
+    dry_run = input("  - Dry run mode? (default: NO, input 1 or y to confirm) ")
+    encode_type = "0"
+    if dry_run not in ('1', 'y'):
+        encode_type = input("  - Encoding options:\n      (0) Copy mode (default)\n      (1) Audio sync fix\n      (2) Audio encode\n      (3) Encode all\n      (4) Scale video\n  You choose: ")
+        if not encode_type:
+            encode_type = "0"
+    scale = ratio = ""
+    if encode_type == "4":
+        scale = input("    - Scale size (example 1280x720): ")
+        ratio = input("    - Ratio (example 4:3): ")
+        if not scale or len(scale.split("x")) != 2:
+            print("Wrong scale format!")
+            exit()
+        if not ratio or len(ratio.split(":")) != 2:
+            print("Wrong ratio format!")
+            exit()
+
     current_dir = os.path.dirname(os.path.realpath(__file__))
     # ---
     dry_run = True if dry_run in ('1', 'y') else False
@@ -239,20 +276,38 @@ if __name__ == "__main__":
     # sort item like Windows sort
     # chapter_data = natsorted(chapter_data, key=itemgetter(*['path']), alg=ns.IGNORECASE)
 
-    if re_encode_first and not dry_run:
-        print("- RUN re-encode video...")
-        idx = 0
-        for item in chapter_data:
-            fix_file = ffmpeg_re_encode(item['path'], temp_dir)
-            if fix_file:
-                chapter_data[idx]['path'] = fix_file
-            idx += 1
-
-    if fix_audio_sync in ("1", "y") and not dry_run:
+    if encode_type == "1" and not dry_run:
         print("- RUN audio sync fix...")
         idx = 0
         for item in chapter_data:
             fix_file = ffmpeg_fix_audio_sync(item['path'], temp_dir)
+            if fix_file:
+                chapter_data[idx]['path'] = fix_file
+            idx += 1
+
+    if encode_type == "2" and not dry_run:
+        print("- RUN audio encode...")
+        idx = 0
+        for item in chapter_data:
+            fix_file = ffmpeg_audio_encode(item['path'], temp_dir)
+            if fix_file:
+                chapter_data[idx]['path'] = fix_file
+            idx += 1
+
+    if encode_type == "3" and not dry_run:
+        print("- RUN encode video and audio...")
+        idx = 0
+        for item in chapter_data:
+            fix_file = ffmpeg_encode_all(item['path'], temp_dir)
+            if fix_file:
+                chapter_data[idx]['path'] = fix_file
+            idx += 1
+
+    if encode_type == "4" and not dry_run and scale and ratio:
+        print("- RUN video scale...")
+        idx = 0
+        for item in chapter_data:
+            fix_file = ffmpeg_scale_video(item['path'], temp_dir, scale, ratio)
             if fix_file:
                 chapter_data[idx]['path'] = fix_file
             idx += 1
