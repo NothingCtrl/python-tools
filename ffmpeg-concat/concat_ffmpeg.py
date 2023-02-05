@@ -202,7 +202,8 @@ def ffmpeg_encode_all(input_video: str, temp_dir_path: str):
 def ffmpeg_scale_video(input_video: str, temp_dir_path: str, scale_size: str, ratio_size: str):
     ext = input_video.split(".").pop()
     video_size = os.path.getsize(input_video)
-    video_name_out = os.path.basename(input_video).replace(f".{ext}", "") + f"_{md5_hash(input_video + str(video_size))[-8:]}_e4_fixed.{ext}"
+    video_name_out = os.path.basename(input_video).replace(f".{ext}", "") + \
+                     f"_{md5_hash(input_video + str(video_size))[-8:]}_e4_fixed.{ext}"
     output_video = os.path.join(temp_dir_path, video_name_out)
     if os.path.isfile(output_video):
         return output_video.replace("\\", "/")
@@ -311,6 +312,18 @@ if __name__ == "__main__":
             if fix_file:
                 chapter_data[idx]['path'] = fix_file
             idx += 1
+
+    # re-calculate chapter data
+    if encode_type in ("1", "2", "3", "4"):
+        fix_total_time = 0
+        idx = 0
+        for item in chapter_data:
+            video_time = get_length(item['path'])
+            chapter_data[idx]['start'] = int(fix_total_time) + 1
+            chapter_data[idx]['length'] = video_time
+            fix_total_time += video_time
+            idx += 1
+        total_time = fix_total_time
 
     # debug data
     with open(debug_file, "w+") as f:
