@@ -13,6 +13,7 @@ if getattr(sys, 'frozen', False):
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--pod", "-p", help="Kubernetes pod name")
+parser.add_argument("--container", "-c", help="Kubernetes container name")
 parser.add_argument("--shell", "-s", help="Pod shell, default: /bin/bash", default="/bin/bash")
 
 args = parser.parse_args()
@@ -28,7 +29,12 @@ if __name__ == '__main__':
             pod_name = line.split(' ')[0]
             print(f"Found pod name: {pod_name}")
             break
+        
     if pod_name:
-        os.system(f"start cmd /k kubectl exec --stdin --tty {pod_name} -- {args.shell}")
+        container_name = args.pod
+        if args.container:
+            container_name = args.container
+        print(f"Using container name: {container_name}")
+        os.system(f"start cmd /k kubectl exec --stdin --tty {pod_name} --container {container_name} -- {args.shell}")
     else:
         print(f"Cannot find pod with name: {pod_name}")
