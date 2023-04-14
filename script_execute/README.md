@@ -9,7 +9,7 @@ Using to execute all script files in the `scripts` folder and get output, the sc
 * Run app: 
     * execute all script(s) with no timeout: `python script_execute.py`
     * execute all script(s) with timeout for 30 seconds: `python script_execute.py 30`
-    * execute single script with no timeout: `python script_execute.py 0 my_script.sh`
+    * execute single script with no timeout: `python script_execute.py 0 my_script.sh` (my_script.sh must exist in the scripts folder)
 * The output logs will save in `logs` folder
 
 ### Build app:
