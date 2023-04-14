@@ -67,7 +67,7 @@ def reboot_linux(days: int):
         else:
             up_days = "0"
         if int(up_days) >= days:
-            telegram_notify(f"System are going to reboot after *{days}* day(s) of running!")
+            telegram_notify(f"{'(Debug) ' if DEBUG else ''}System are going to reboot after *{days}* day(s) of running!")
             if not DEBUG:
                 os.system("/sbin/shutdown -r now")
             else:
