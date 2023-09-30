@@ -11,3 +11,5 @@ temp/
 .python-version
 script_execute/scripts/*
 script_execute/logs/*
+builder*.bat
+builder*.sh

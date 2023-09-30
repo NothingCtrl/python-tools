@@ -5,13 +5,13 @@
 #### Features note
 
 * Auto reboot system by counting uptime days (not by interval)
-* Support send Telegram message before reboot ([create a bot](https://core.telegram.org/bots#how-do-i-create-a-bot)), required environment params:
+* Support for sending Telegram messages before a reboot using the [Telegram Bot API](https://core.telegram.org/bots#how-do-i-create-a-bot) is available. To use this feature, the required environment parameters are:
     ```
     export AUTO_REBOOT_TELEGRAM_TOKEN=
     export AUTO_REBOOT_TELEGRAM_CHAT_ID=
     export AUTO_REBOOT_SERVICE_NAME=
     ```
-#### Usage
+#### Usage example
 
-* Reboot if system uptime from 100 days: `./auto_reboot 100`
-* Debug mode will print out report but not execute reboot command: `./auto_reboot 100 debug`
+* Reboot the system if it has been running for 100 days or more.: `./auto_reboot 100`
+* In the debug mode, application will print out report but not execute reboot command: `./auto_reboot 100 debug`

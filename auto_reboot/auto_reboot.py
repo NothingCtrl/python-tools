@@ -51,7 +51,7 @@ def reboot_windows(days: int):
     w_date = datetime.datetime.strptime(tmp, "%A, %B %d, %Y %I:%M:%S %p")
     diff_in_day = (current_time - w_date).days
     if diff_in_day >= days:
-        telegram_notify(f"System are going to reboot after *{days}* day(s) of running!")
+        telegram_notify(f"System is going to reboot after *{days}* days of running!")
         if not DEBUG:
             os.system("shutdown -r -t 000")
         else:
@@ -67,7 +67,7 @@ def reboot_linux(days: int):
         else:
             up_days = "0"
         if int(up_days) >= days:
-            telegram_notify(f"{'(Debug) ' if DEBUG else ''}System are going to reboot after *{up_days}* day(s) of running!")
+            telegram_notify(f"{'(Debug) ' if DEBUG else ''}System is going to reboot after *{up_days}* days of running!")
             if not DEBUG:
                 os.system("/sbin/shutdown -r now")
             else:
