@@ -13,3 +13,6 @@ script_execute/scripts/*
 script_execute/logs/*
 builder*.bat
 builder*.sh
+*.log
+*.specs
+.env

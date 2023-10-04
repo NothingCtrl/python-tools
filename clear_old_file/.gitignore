@@ -1,0 +1,9 @@
+venv
+build
+dist
+.idea
+build_for_linux.bat
+*.log
+*.spec
+_*local*.bat
+.env
