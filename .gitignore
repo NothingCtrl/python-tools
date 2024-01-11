@@ -16,3 +16,4 @@ builder*.sh
 *.log
 *.specs
 .env
+keep_alive/check_list.json
