@@ -94,7 +94,7 @@ def read_cli_log(severity: str = "", filter_from_date: str = "", debug: bool = F
 def send_email(sender_address: str, to_address: str, subject: str, message: str):
     try:
         server = smtplib.SMTP("localhost", 25)
-        server.sendmail(sender_address, [to_address], f"""Subject: {subject}\nTo: {to_address}\n{message}""")
+        server.sendmail(sender_address, [to_address], f"""Subject: {subject}\nTo: {to_address}\n\n\n{message}""")
     except Exception:
         if not os.path.isdir("logs"):
             os.mkdir("logs")
