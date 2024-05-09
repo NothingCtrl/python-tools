@@ -18,7 +18,7 @@ The result can print in console or send via email.
   * Send email: `python open_manage_report_logs.py Critical send-email`
   * Debug: `python open_manage_report_logs.py Critical debug`
   
-* Filter logs have severity = `Non-Critical` of specific date `2023-05-2`:
+* Filter logs have severity = `Non-Critical` of specific date `2023-05-21`:
   * Print output: `python open_manage_report_logs.py Non-Critical _ 2023-05-21`
   * Send email: `python open_manage_report_logs.py Non-Critical send-email 2023-05-21`
   * Debug: `python open_manage_report_logs.py Non-Critical debug 2023-05-21`
