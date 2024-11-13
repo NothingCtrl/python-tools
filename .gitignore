@@ -17,3 +17,5 @@ builder*.sh
 *.specs
 .env
 keep_alive/check_list.json
+local_only
+_gravatar_config.json
