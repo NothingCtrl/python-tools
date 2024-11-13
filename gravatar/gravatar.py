@@ -53,8 +53,19 @@ def get_confirm_email(email_addr: str):
     if "mailbox_username" in configs and "mailbox_password" in configs and "mail_server_address" in configs:
         # create an IMAP4 class with SSL
         imap = imaplib.IMAP4_SSL(configs['mail_server_address'])
-        # authenticate
-        imap.login(configs['mailbox_username'], configs['mailbox_password'])
+        login_retry = 5
+        while login_retry > 0:
+            # authenticate
+            try:
+                imap.login(configs['mailbox_username'], configs['mailbox_password'])
+                break
+            except imaplib.IMAP4.abort:
+                login_retry -= 1
+                if login_retry > 0:
+                    time.sleep(15)
+        if login_retry == 0:
+            print(f"- [get_confirm_email] ERROR, cannot login!")
+            return ""
         status, messages = imap.select("INBOX")
         # total number of emails
         messages = int(messages[0])
@@ -103,7 +114,13 @@ def get_confirm_email(email_addr: str):
                             pattern = re.compile("href=\".*?\">Confirm your email")
                             groups = pattern.search(body)
                             if groups:
+                                # close the connection and logout
+                                imap.close()
+                                imap.logout()
                                 return groups[0].replace("href=\"", "").replace("\">Confirm your email", "")
+        # close the connection and logout
+        imap.close()
+        imap.logout()
         return ""
     else:
         return ""
@@ -145,7 +162,8 @@ def add_email(email_addr: str) -> tuple:
                     else:
                         time.sleep(30)
                 if not active_ok:
-                    print(f"- [add_email] cannot get active email from address: {email_addr}")
+                    print(f"- [add_email] cannot active for address: {email_addr}")
+                    return False, "Cannot get active url"
             return True, ""
         else:
             return False, f"[ERROR] Response error, status code: {rp.status_code}, text: {rp.text}"
@@ -171,7 +189,7 @@ def set_avatar(email_addr: str, image_id: str) -> tuple:
                 pass
             return "error" not in rp.text, rp.text
         else:
-            return False, f"Response error, status code: {rp.status_code}, text: {rp.text}"
+            return False, f"[ERROR] Response error, status code: {rp.status_code}, text: {rp.text}"
     else:
         return False, "[ERROR] Please add config for payload request headers!"
 
@@ -199,7 +217,7 @@ def set_alt_text(image_id: str, alt_text: str) -> tuple:
                 pass
             return "error" not in rp.text, rp.text
         else:
-            return False, f"Response error, status code: {rp.status_code}, text: {rp.text}"
+            return False, f"[ERROR] Response error, status code: {rp.status_code}, text: {rp.text}"
     else:
         return False, "[ERROR] Please add config for payload request headers!"
 
@@ -220,7 +238,7 @@ def delete_image(image_id: str) -> tuple:
                 pass
             return "error" not in rp.text, rp.text
         else:
-            return False, f"Response error, status code: {rp.status_code}, text: {rp.text}"
+            return False, f"[ERROR] Response error, status code: {rp.status_code}, text: {rp.text}"
     else:
         return False, "[ERROR] Please add config for payload request headers!"
 
@@ -259,7 +277,7 @@ def upload_image(file_path: str, alt_text_filename: bool = True) -> tuple:
                 pass
             return False, rp.text
         else:
-            return False, f"Response error, status code: {rp.status_code}, text: {rp.text}"
+            return False, f"[ERROR] Response error, status code: {rp.status_code}, text: {rp.text}"
     else:
         return False, "[ERROR] Please add config for payload request headers!"
 
