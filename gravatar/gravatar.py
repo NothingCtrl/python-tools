@@ -1,3 +1,6 @@
+import imaplib
+import email
+from email.header import decode_header
 import requests
 import os
 import re
@@ -45,30 +48,118 @@ def save_configs(data_pair: dict):
         json.dump(data_pair, f, indent=4, sort_keys=True)
     return True
 
+def get_confirm_email(email_addr: str):
+    configs = load_configs(filter_key="")
+    if "mailbox_username" in configs and "mailbox_password" in configs and "mail_server_address" in configs:
+        # create an IMAP4 class with SSL
+        imap = imaplib.IMAP4_SSL(configs['mail_server_address'])
+        # authenticate
+        imap.login(configs['mailbox_username'], configs['mailbox_password'])
+        status, messages = imap.select("INBOX")
+        # total number of emails
+        messages = int(messages[0])
+        # fetch top 3 messages
+        for i in range(messages, messages - 3, -1):
+            # fetch the email message by ID
+            res, msg = imap.fetch(str(i), "(RFC822)")
+            for response in msg:
+                if isinstance(response, tuple):
+                    # parse a bytes email into a message object
+                    msg = email.message_from_bytes(response[1])
+                    # decode the email subject
+                    subject, encoding = decode_header(msg["Subject"])[0]
+                    if isinstance(subject, bytes):
+                        # if it's a bytes, decode to str
+                        subject = subject.decode(encoding)
+                    # decode email sender
+                    send_from, encoding = decode_header(msg.get("From"))[0]
+                    if isinstance(send_from, bytes):
+                        send_from = send_from.decode(encoding)
+                    # print("Subject:", subject)
+                    # print("From:", send_from)
+                    body = ""
+                    content_type = ""
+                    # if the email message is multipart
+                    if msg.is_multipart():
+                        # iterate over email parts
+                        for part in msg.walk():
+                            # extract content type of email
+                            content_type = part.get_content_type()
+                            content_disposition = str(part.get("Content-Disposition"))
+                            try:
+                                # get the email body
+                                body += part.get_payload(decode=True).decode()
+                            except:
+                                pass
+                    else:
+                        # extract content type of email
+                        content_type = msg.get_content_type()
+                        # get the email body
+                        body = msg.get_payload(decode=True).decode()
 
-def add_email(email: str) -> tuple:
+                    if body and "Verify email addition" in subject and "donotreply@gravatar.com" in send_from and \
+                            content_type == "text/html":
+                        if email_addr in body:
+                            pattern = re.compile("href=\".*?\">Confirm your email")
+                            groups = pattern.search(body)
+                            if groups:
+                                return groups[0].replace("href=\"", "").replace("\">Confirm your email", "")
+        return ""
+    else:
+        return ""
+
+
+def add_email(email_addr: str) -> tuple:
     """Add an email address to Gravatar account"""
     end_point = "https://api.gravatar.com/v2/users/me/identity?_locale=&source=web-app-editor"
-    headers = load_configs()
-    if headers:
+    configs = load_configs(filter_key="")
+    auto_active_email = False
+    if "mailbox_username" in configs and "mailbox_password" in configs and "mail_server_address" in configs:
+        auto_active_email = True
+    if configs.get("headers"):
         update_x_gr_nonce()
         ss_rq = requests.session()
-        rp = ss_rq.post(end_point, data={"email": email, "locate": "en"}, headers=headers)
+        rp = ss_rq.post(end_point, json={"email": email_addr, "locate": "en"}, headers=configs.get("headers"))
         if rp.status_code:
+            try:
+                _data = rp.json()
+                if "error" in _data:
+                    return False, _data["error"]
+            except Exception:
+                return False, "[ERROR] Json decode error!"
+            if auto_active_email:
+                print(f"- [add_email] auto confirm address [{email_addr}], please wait...")
+                active_ok = False
+                start_time = time.time()
+                time.sleep(30)
+                while time.time() - start_time < 300:
+                    active_url = get_confirm_email(email_addr)
+                    if active_url:
+                        print(f"- [add_email] active url: {active_url}")
+                        # user click url and browser redirect to gravatar.com
+                        # then redirect to gravatar.com/profile/avatars/?added=<address>
+                        ss_rq.get(active_url.replace("https://en.gravatar.com/", "https://gravatar.com/"),
+                                  headers=configs.get("headers"), allow_redirects=True)
+                        active_ok = True
+                        break
+                    else:
+                        time.sleep(30)
+                if not active_ok:
+                    print(f"- [add_email] cannot get active email from address: {email_addr}")
             return True, ""
         else:
-            return False, f"Response error, status code: {rp.status_code}, text: {rp.text}"
+            return False, f"[ERROR] Response error, status code: {rp.status_code}, text: {rp.text}"
     else:
         return False, "[ERROR] Please add config for payload request headers!"
 
 
-def set_avatar(email: str, image_id: str) -> tuple:
+def set_avatar(email_addr: str, image_id: str) -> tuple:
     end_point = "https://api.gravatar.com/v2/users/me/identity/MD5_HASH?_locale=&source=web-app-editor"
     headers = load_configs()
     if headers:
         update_x_gr_nonce()
         ss_rq = requests.session()
-        email_hash = hashlib.md5(email.strip().lower().encode('utf-8')).hexdigest()
+        email_hash = hashlib.md5(email_addr.strip().lower().encode('utf-8')).hexdigest()
         target = end_point.replace("MD5_HASH", email_hash)
         rp = ss_rq.post(target, json={"image_id": image_id}, headers=headers)
         if rp.status_code:
@@ -173,16 +264,57 @@ def upload_image(file_path: str, alt_text_filename: bool = True) -> tuple:
         return False, "[ERROR] Please add config for payload request headers!"
 
 
-def upload_and_set_avatar(email_address: str, file_path: str) -> tuple:
+def upload_and_set_avatar(email_addr: str, file_path: str) -> tuple:
+    email_exist = False
+    ok, _data = get_data(email_addr)
+    if ok and _data['identities']:
+        for item in _data['identities']:
+            if item['email'] == email_addr:
+                email_exist = True
+                break
+    if not email_exist:
+        ok, error = add_email(email_addr)
+        if not ok:
+            return False, "", error
     status, _data = upload_image(file_path)
     if status:
-        status, error = set_avatar(email_address, _data['image_id'])
+        status, error = set_avatar(email_addr, _data['image_id'])
         if status:
             return True, _data['image_id'], "IMAGE_UPLOADED_AND_SET"
         else:
             return False, _data['image_id'], error
     else:
-        return False, _data
+        return False, "", _data
+
+
+def set_avatar_from_dir(dir_path: str, domain: str, allow_extension: tuple =('jpg',)):
+    """Scan dir_path get image file then add to gravatar, file name must have format: <username>.jpg"""
+    items = os.listdir(dir_path)
+    ok_item = []
+    err_item = []
+    for item in items:
+        file_path = os.path.join(dir_path, item)
+        if os.path.isfile(file_path):
+            name_split = item.split(".")
+            ex = name_split.pop(-1)
+            if ex in allow_extension:
+                username = ".".join(name_split).lower()
+                email_addr = f"{username}@{domain}"
+                is_ok, _, error = upload_and_set_avatar(email_addr, file_path)
+                msg = f"---\n- username: [{username}], email: [{email_addr}], result: {'OK' if is_ok else 'ERROR'}"
+                if not is_ok:
+                    msg += f", error: {error}"
+                print(f"{msg}\n")
+                if is_ok:
+                    ok_item.append(username)
+                else:
+                    err_item.append(username)
+    if items and (ok_item or err_item):
+        print(f"- Total OK: {len(ok_item)}, list: {ok_item}")
+        print(f"- Total ERROR: {len(err_item)}, list: {err_item}")
+    else:
+        print(f"- Nothing todo")
+    return ok_item, err_item
 
 
 def get_data(filter_text: str = "") -> tuple:
