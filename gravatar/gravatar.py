@@ -393,16 +393,41 @@ def update_x_gr_nonce(force: bool = False) -> tuple:
         return False, "NO_CONFIG_EXIST"
 
 
+def show_help():
+    print("""--- USAGE ---
+* Get data: `python gravatar.py get_data`, to filter email or image `python gravatar.py get_data <filter-text-here>`
+* Add email: `python gravatar.py add_email <email-address>` (automatic check inbox to get active URL if these is available email configs)
+* Set avatar for an exist email: `python gravatar.py set_avatar <email-address> <image-id>`
+* Set alt-text for an exist image: `python gravatar.py set_alt_text <image-id> <your-text>`
+* Delete an exist image: `python gravatar.py delete_image <image-id>`
+* Upload image from local: `python gravatar.py upload_image <path-to-image-file>`
+* **Upload image and set email avatar**: `python gravatar.py upload_and_set_avatar <email-address> <path-to-image-file>`
+* **Scan directory and set email avatar based-on filename**: `python gravatar.py set_avatar_from_dir <path-to-directory> <domain>`
+* Refresh `X-Gr-Nonce`: `python gravatar.py update_x_gr_nonce` (just for test, this token refresh automatically)
+
+--- CONFIG ---
+Before execute, it's required user confirm by input 'y' or 'Y', to ignore it, set environment param: `GRAVATAR_IGNORE_CONFIRM=1`
+    """)
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         function_name = sys.argv[1]
+        if function_name in ('-h', '--help'):
+            show_help()
+            exit()
         params = sys.argv[1:]
         params.pop(0)
         print("-" * 20)
         print(f"- Function name: {function_name}")
         print(f"- Params: {params}")
-        cf = input("Press y/Y to continue... ")
-        if cf.lower() == 'y':
+        allow_execute = False
+        if os.getenv('GRAVATAR_IGNORE_CONFIRM', '0') == '0':
+            cf = input("Press y/Y to continue... ")
+            allow_execute = cf.lower() == 'y'
+        else:
+            allow_execute = True
+        if allow_execute:
             try:
                 result = getattr(sys.modules[__name__], function_name)(*params)
                 print("-" * 10)
@@ -411,3 +436,5 @@ if __name__ == "__main__":
             except Exception:
                 print("-" * 10)
                 print(f"Error, traceback: {format_exc()}")
+    else:
+        show_help()

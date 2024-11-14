@@ -39,6 +39,11 @@ Support feature to management Gravatar account:
         "mailbox_username": "email-login-username"
     }
     ```
+### IGNORE CONFIRM
+
+Before execute, it's required user confirm by input 'y' or 'Y', to ignore it, 
+set environment param: `GRAVATAR_IGNORE_CONFIRM=1`
+
 ### Usages
 
 * Get data: `python gravatar.py get_data`, to filter email or image `python gravatar.py get_data <filter-text-here>`
