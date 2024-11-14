@@ -246,11 +246,13 @@ def delete_image(image_id: str) -> tuple:
 def upload_image(file_path: str, alt_text_filename: bool = True) -> tuple:
     """Upload an image avatar"""
     end_point = "https://api.gravatar.com/v2/users/me/image?_locale=&source=web-app-editor"
-    headers = load_configs()
+    configs = load_configs(filter_key="")
+    headers = configs["headers"] if "headers" in configs else {}
     if headers:
         update_x_gr_nonce()
         ss_rq = requests.session()
-        files = {'image': (os.path.basename(file_path), open(file_path, 'rb'), "image/jpeg")}
+        image_f = open(file_path, 'rb')
+        files = {'image': (os.path.basename(file_path), image_f, "image/jpeg")}
         # required post request with Content-Type:multipart/form-data; boundary=????
         body, content_type = requests.models.RequestEncodingMixin._encode_files(files, {
             "source": "direct",
@@ -271,7 +273,26 @@ def upload_image(file_path: str, alt_text_filename: bool = True) -> tuple:
                     if alt_text_filename:
                         status, _error = set_alt_text(image_data['image_id'], os.path.basename(file_path))
                         if not status:
-                            print(f"Set altText failed, error:\n{_error}")
+                            print(f"- [upload_image] Set altText failed, error:\n{_error}")
+                    if configs.get("move_uploaded_to_done", False):
+                        try:
+                            image_f.close()
+                            base_dir = os.path.dirname(file_path)
+                            done_dir = os.path.join(base_dir, "done")
+                            new_file_path = os.path.join(done_dir, os.path.basename(file_path))
+                            if not os.path.isdir(done_dir):
+                                os.mkdir(done_dir)
+                            if not os.path.isfile(new_file_path):
+                                os.rename(file_path, new_file_path)
+                            else:
+                                tmp = os.path.basename(file_path).split(".")
+                                ext = tmp.pop(-1)
+                                name = ".".join(tmp)
+                                new_file_path = os.path.join(done_dir, f"{name}_{int(time.time())}.{ext}")
+                                os.rename(file_path, new_file_path)
+                        except Exception:
+                            print(f"- [upload_image] Cannot move file {os.path.basename(file_path)}, "
+                                  f"error:\n{format_exc()}")
                     return True, image_data
             except Exception:
                 pass

@@ -39,6 +39,14 @@ Support feature to management Gravatar account:
         "mailbox_username": "email-login-username"
     }
     ```
+  * To auto move uploaded file to subdir `done`, add to config: `"move_uploaded_to_done": true`
+    ```json
+    {
+        "headers": {...},
+        ...
+        "move_uploaded_to_done": true
+    }
+    ```
 ### IGNORE CONFIRM
 
 Before execute, it's required user confirm by input 'y' or 'Y', to ignore it, 
